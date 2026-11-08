@@ -1,0 +1,64 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Debug APK (Android 15 / API 35)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Grant Execute Permission to Gradlew (if present)
+        run: |
+          if [ -f "./gradlew" ]; then chmod +x ./gradlew; fi
+          if [ -f "./android/gradlew" ]; then chmod +x ./android/gradlew; fi
+
+      - name: Build Debug APK
+        run: |
+          # Detect whether settings.gradle is at the root or inside android/
+          if [ -f "settings.gradle" ]; then
+            gradle :app:assembleDebug --no-daemon --stacktrace
+          elif [ -f "android/settings.gradle" ]; then
+            cd android
+            gradle :app:assembleDebug --no-daemon --stacktrace
+          else
+            echo "Error: settings.gradle not found in root or android/ directory"
+            exit 1
+          fi
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple-launcher-debug-apk
+          path: |
+            **/app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/*.apk
+          retention-days: 14
